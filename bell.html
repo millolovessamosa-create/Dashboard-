@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ambient Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Playfair Display', serif;
+      color: white;
+      background-color: #f5f0e6;
+      background-image: url('library.jpg');
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-attachment: fixed;
+      background-size: cover;
+      transition: background 0.5s ease-in-out;
+    }
+
+    #overlay {
+      position: fixed; top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.7);
+      display:flex; align-items:center; justify-content:center;
+      z-index:9999; cursor:pointer; flex-direction:column;
+      font-size:1.5em; text-align:center;
+    }
+
+    main { display:flex; min-height:100vh; }
+    aside {
+      width:280px;
+      background: rgba(0,0,0,0.6);
+      padding:20px;
+      color:white;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+
+    section {
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+    }
+
+    #timer {
+      font-size:6em;
+      font-weight:600;
+      margin:0;
+      text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
+    }
+
+    .controls {
+      margin-top:20px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      width:200px;
+    }
+
+    .controls button, .sidebar-btn {
+      padding:8px;
+      font-size:1em;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+      background:rgba(255,255,255,0.8);
+      color:#3b2f2f;
+      transition:0.2s;
+    }
+
+    .controls button:hover, .sidebar-btn:hover {
+      background:white;
+    }
+
+    input[type=range] { width:100%; }
+
+    .focus-friend {
+      position: fixed;
+      bottom:10px;
+      right:10px;
+      width:200px;
+      text-align:center;
+      display:none; /* hidden by default */
+    }
+
+    .focus-friend img {
+      width:100%;
+      border-radius:12px;
+    }
+
+    .focus-friend input {
+      margin-top:5px;
+      padding:5px;
+      border-radius:6px;
+      border:none;
+      text-align:center;
+      font-size:1em;
+    }
+
+    iframe {
+      border-radius:12px;
+      border:none;
+      width:100%;
+      height:352px;
+      margin-top:10px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="overlay">Click anywhere to unlock audio & start</div>
+
+<main>
+  <aside>
+    <div>
+      <h3>Backdrops</h3>
+      <button class="sidebar-btn" onclick="setBackground('library.jpg')">Library</button>
+      <button class="sidebar-btn" onclick="setBackground('coffee_shop.jpg')">Coffee Shop</button>
+      <button class="sidebar-btn" onclick="setBackground('fireplace.jpg')">Fireplace</button>
+      <input type="file" accept="image/*" onchange="uploadBackground(event)">
+
+      <h3 style="margin-top:20px;">Ambient Sounds</h3>
+      <div><label>Rain</label><button onclick="toggleSound('rain')">Play/Pause</button><input type="range" min="0" max="1" step="0.01" value="0.5" onchange="setVolume('rain',this.value)"></div>
+      <div><label>Fire</label><button onclick="toggleSound('fire')">Play/Pause</button><input type="range" min="0" max="1" step="0.01" value="0.5" onchange="setVolume('fire',this.value)"></div>
+      <div><label>Waves</label><button onclick="toggleSound('waves')">Play/Pause</button><input type="range" min="0" max="1" step="0.01" value="0.5" onchange="setVolume('waves',this.value)"></div>
+      <div><label>Exam</label><button onclick="toggleSound('exam')">Play/Pause</button><input type="range" min="0" max="1" step="0.01" value="0.5" onchange="setVolume('exam',this.value)"></div>
+      <div><label>Murmur</label><button onclick="toggleSound('murmur')">Play/Pause</button><input type="range" min="0" max="1" step="0.01" value="0.5" onchange="setVolume('murmur',this.value)"></div>
+    </div>
+
+    <div id="spotify">
+      <h3>Spotify</h3>
+      <iframe src="https://open.spotify.com/embed/playlist/3f4PUagtmMyHvgFB8ByZsS?utm_source=generator"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"></iframe>
+    </div>
+  </aside>
+
+  <section>
+    <h1 id="timer">25:00</h1>
+    <div class="controls">
+      <input type="number" id="customMinutes" class="time-input" placeholder="Minutes">
+      <button onclick="setCustomPomodoro()">Set Timer</button>
+      <button onclick="startPomodoro()">Start</button>
+      <button onclick="resetPomodoro()">Reset</button>
+    </div>
+  </section>
+</main>
+
+<div class="focus-friend" id="focusFriend">
+  <img src="focus.gif.gif" alt="Focus Friend">
+  <input type="text" id="friend-name" placeholder="Name me!">
+  <p id="display-name"></p>
+</div>
+
+<script>
+let unlocked=false, audioCtx, soundNodes={};
+document.getElementById("overlay").addEventListener("click", () => {
+  if (unlocked) return;
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  unlocked=true;
+  document.getElementById("overlay").style.display="none";
+});
+
+// ---------- Ambient sound controls ----------
+function toggleSound(name){
+  if(!unlocked){ alert("Click overlay first"); return; }
+  if(soundNodes[name]){
+    soundNodes[name].src.stop(); soundNodes[name]=null;
+  }else{
+    let gen;
+    if(name==="rain") gen=createRain();
+    if(name==="fire") gen=createFire();
+    if(name==="waves") gen=createWaves();
+    if(name==="exam") gen=createExam();
+    if(name==="murmur") gen=createMurmur();
+    const gain=audioCtx.createGain(); gain.gain.value=0.5;
+    gen.gain.connect(gain).connect(audioCtx.destination);
+    gen.src.start();
+    soundNodes[name]={...gen,gain};
+  }
+}
+function setVolume(name,val){ if(soundNodes[name]) soundNodes[name].gain.gain.value=val; }
+
+function createRain(){ const noise=audioCtx.createBufferSource(); const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate); const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++){ data[i]=Math.random()*2-1; } noise.buffer=buffer; noise.loop=true; const filter=audioCtx.createBiquadFilter(); filter.type="lowpass"; filter.frequency.value=1000; noise.connect(filter); return {src:noise,gain:filter}; }
+function createFire(){ const noise=audioCtx.createBufferSource(); const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate); const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++){ data[i]=(Math.random()*2-1)*(Math.random()>0.98?3:0.3); } noise.buffer=buffer; noise.loop=true; const filter=audioCtx.createBiquadFilter(); filter.type="bandpass"; filter.frequency.value=150; noise.connect(filter); return {src:noise,gain:filter}; }
+function createWaves(){ const noise=audioCtx.createBufferSource(); const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate); const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++){ data[i]=(Math.random()*2-1)*0.3; } noise.buffer=buffer; noise.loop=true; const filter=audioCtx.createBiquadFilter(); filter.type="lowpass"; filter.frequency.value=400; noise.connect(filter); return {src:noise,gain:filter}; }
+function createExam(){ const osc=audioCtx.createOscillator(); osc.type="sine"; osc.frequency.value=440; return {src:osc,gain:osc}; }
+function createMurmur(){ const noise=audioCtx.createBufferSource(); const buffer=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate); const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++){ data[i]=(Math.random()*2-1)*0.2; } noise.buffer=buffer; noise.loop=true; const filter=audioCtx.createBiquadFilter(); filter.type="lowpass"; filter.frequency.value=250; noise.connect(filter); return {src:noise,gain:filter}; }
+
+// ---------- Beep generator ----------
+function playBeep(times=3, gap=300) {
+  if (!audioCtx) return;
+  for (let i=0; i<times; i++) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    const startTime = audioCtx.currentTime + i * (gap/1000);
+    const endTime = startTime + 0.3;
+    gain.gain.setValueAtTime(0.2, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(startTime);
+    osc.stop(endTime);
+  }
+}
+
+// ---------- Pomodoro Timer ----------
+let timerInterval, timeLeft = 25 * 60;
+const focusFriend = document.getElementById("focusFriend");
+
+if ("Notification" in window && Notification.permission !== "granted") {
+  Notification.requestPermission();
+}
+
+function updateDisplay() {
+  let minutes = Math.floor(timeLeft / 60);
+  let seconds = timeLeft % 60;
+  document.getElementById("timer").textContent =
+    `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function startPomodoro() {
+  clearInterval(timerInterval);
+  focusFriend.style.display = "block"; // show friend
+  timerInterval = setInterval(() => {
+    if (timeLeft > 0) {
+      timeLeft--;
+      updateDisplay();
+    } else {
+      clearInterval(timerInterval);
+      playBeep(); // 3x beep
+      showNotification();
+      focusFriend.style.display = "none"; // hide friend when done
+    }
+  }, 1000);
+}
+
+function resetPomodoro() {
+  clearInterval(timerInterval);
+  timeLeft = 25 * 60;
+  updateDisplay();
+  focusFriend.style.display = "none"; // hide friend on reset
+}
+
+function setCustomPomodoro() {
+  let custom = parseInt(document.getElementById("customMinutes").value);
+  if (!isNaN(custom) && custom > 0) {
+    timeLeft = custom * 60;
+    updateDisplay();
+  }
+}
+
+function showNotification() {
+  if ("Notification" in window) {
+    if (Notification.permission === "granted") {
+      new Notification("⏰ Pomodoro Finished!", {
+        body: "Take a break, you earned it!",
+        icon: "https://cdn-icons-png.flaticon.com/512/2088/2088617.png"
+      });
+    } else {
+      alert("⏰ Time's up!");
+    }
+  }
+}
+
+updateDisplay();
+</script>
+</body>
+</html>
+
